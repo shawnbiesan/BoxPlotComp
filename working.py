@@ -17,12 +17,17 @@ from sklearn.linear_model import LogisticRegression, SGDClassifier
 from nltk.corpus import stopwords
 import Stemmer
 from sklearn.decomposition import PCA, TruncatedSVD
+from sklearn.metrics import hamming_loss
 
 
 import numpy as np
 
 sample = pd.read_csv('SubmissionFormat.csv')
 stemmer = Stemmer.Stemmer('en')
+
+
+def sample_data(df):
+    return df.loc[np.random.choice(df.index, df.shape[0] / 10, replace=False)]
 
 def string_concat_columns(df):
     df['mew'] =      str(df['Facility_or_Department'] + ' ' +
@@ -50,22 +55,43 @@ class StemmedTfidfVectorizer(TfidfVectorizer):
          analyzer = super(TfidfVectorizer, self).build_analyzer()
          return lambda doc: stemmer.stemWords(analyzer(doc))
 
-def validate_model_multi(train, labels, clf):
+def validate_model(train, labels):
 
     #Simple K-Fold cross validation. 5 folds.
-    cv = cross_validation.KFold(len(train), n_folds=5, indices=False)
+
 
     #iterate through the training and test cross validation segments and
     #run the classifier on each one, aggregating the results into a list
-    results = []
+    results = defaultdict(list)
     sum_mean = 0
     sum_std = 0
-    for traincv, testcv in cv:
-        clf.fit(train[traincv], labels[traincv])
-        results.append(mean_squared_error(labels[testcv], clf.predict(train[testcv])))
-    sum_mean += np.array(results).mean()
-    sum_std += np.array(results).std()
-    print "Results: " + str(sum_mean) + " "  + str(sum_std)
+
+    for output in outputs:
+        cv = cross_validation.StratifiedKFold(labels[output])
+        tfidf = StemmedTfidfVectorizer(stop_words='english')
+        clf = SGDClassifier(alpha=.01, loss='log')
+        for traincv, testcv in cv:
+
+            transformed_x = tfidf.fit_transform(train.values[traincv])
+            transformed_y = tfidf.fit_transform(train.values[testcv])
+            print outputs
+            print output
+            print "------------------------"
+
+
+            clf.fit(transformed_x, labels[output].values[traincv])
+
+            #print pd.unique(labels[output])
+            #print pd.unique(clf.predict(train.values[testcv]))
+            #print clf.predict(train.values[testcv])
+            results[output].append(hamming_loss(labels[output].values[testcv], clf.predict(transformed_y)))
+            #
+
+    for result in results:
+        sum_mean += np.array(results[result]).mean()
+        sum_std += np.array(results[result]).std()
+        print "Results %s: " %(result,) + str( np.array(results[result]).mean()) + " " + str(np.array(results[result]).std())
+    print "Final: %s %s" %(1.0 * sum_mean/ len(outputs), 1.0 * sum_std / len(outputs))
 
 train = pd.read_csv('TrainingData.csv')
 test = pd.read_csv('TestData.csv')
@@ -105,6 +131,8 @@ num_features = [
 ]
 
 
+train = sample_data(train)
+
 train[text_features] = train[text_features].fillna('NA')
 train = string_concat_columns(train)
 train['LenAll'] = len(train['mew'])
@@ -116,34 +144,21 @@ test = string_concat_columns(test)
 test['LenAll'] = len(test['mew'])
 test[num_features] = test[num_features].fillna(0)
 
-#tfidf = TfidfVectorizer(stop_words='english', tokenizer=tokenize, max_features=1000)
+
 tfidf = StemmedTfidfVectorizer(stop_words='english')
 
 transformed_x = tfidf.fit_transform(train['mew'])
 transformed_y = tfidf.transform(test['mew'])
 
-trunc = TruncatedSVD(n_components=100)
-
-svd_x = trunc.fit_transform(transformed_x)
-svd_y = trunc.transform(transformed_y)
-
-#combined_features_x = np.c_[svd_x, train[num_features]]
-#combined_features_y = np.c_[svd_y, test[num_features]]
 
 
-#text_clf = Pipeline([#('vect', TfidfVectorizer(stop_words='english', tokenizer=tokenize)),
-#                      #('dimreduct', TruncatedSVD()),
-#                      ('clf', LogisticRegression()),
-#                      ]
-#)
+validate_model(train['mew'], train[outputs])
 
 
+#for output in outputs:
+#    clf = SGDClassifier(alpha=.01, loss='log')
+#    clf.fit(transformed_x, train[output])
+#    result = clf.predict_proba(transformed_y)
+#    sample[[output + '__' + entry for entry in clf.classes_]] = result
 
-
-for output in outputs:
-    clf = SGDClassifier(alpha=.01, loss='log')
-    clf.fit(svd_x, train[output])
-    result = clf.predict_proba(svd_y)
-    sample[[output + '__' + entry for entry in clf.classes_]] = result
-
-sample.to_csv("resultmixed.csv", index=False)
+#sample.to_csv("resultmixed.csv", index=False)
