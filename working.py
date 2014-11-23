@@ -17,7 +17,7 @@ from sklearn.linear_model import LogisticRegression, SGDClassifier
 from nltk.corpus import stopwords
 import Stemmer
 from sklearn.decomposition import PCA, TruncatedSVD
-from sklearn.metrics import hamming_loss
+from sklearn.metrics import hamming_loss, log_loss
 
 
 import numpy as np
@@ -27,7 +27,7 @@ stemmer = Stemmer.Stemmer('en')
 
 
 def sample_data(df):
-    return df.loc[np.random.choice(df.index, df.shape[0] / 10, replace=False)]
+    return df.loc[np.random.choice(df.index, df.shape[0] / 3, replace=False)]
 
 def string_concat_columns(df):
     df['mew'] =      str(df['Facility_or_Department'] + ' ' +
@@ -84,7 +84,8 @@ def validate_model(train, labels):
             #print pd.unique(labels[output])
             #print pd.unique(clf.predict(train.values[testcv]))
             #print clf.predict(train.values[testcv])
-            results[output].append(hamming_loss(labels[output].values[testcv], clf.predict(transformed_y)))
+            #results[output].append(hamming_loss(labels[output].values[testcv], clf.predict(transformed_y)))
+            results[output].append(log_loss(labels[output].values[testcv], clf.predict_proba(transformed_y)))
             #
 
     for result in results:
