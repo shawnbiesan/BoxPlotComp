@@ -2,10 +2,6 @@ __author__ = 'sbiesan'
 
 import pandas as pd
 from sklearn import cross_validation
-from sklearn.feature_selection import SelectKBest, f_regression
-from sklearn.metrics import mean_squared_error
-from sklearn.metrics import precision_score
-from sklearn.metrics import recall_score
 from sklearn.pipeline import Pipeline
 from collections import defaultdict
 from sklearn.grid_search import GridSearchCV
@@ -18,7 +14,8 @@ from nltk.corpus import stopwords
 import Stemmer
 from sklearn.decomposition import PCA, TruncatedSVD
 from sklearn.metrics import hamming_loss, log_loss
-
+from sklearn.decomposition import truncated_svd
+import scipy as sp
 
 import numpy as np
 
@@ -29,8 +26,17 @@ stemmer = Stemmer.Stemmer('en')
 def sample_data(df):
     return df.loc[np.random.choice(df.index, df.shape[0] / 3, replace=False)]
 
+def tester(text_, column_):
+    num = 0
+    for entry in column_:
+        for word in entry.split():
+            if word in text_:
+                num+=1
+    return num
+
+
 def string_concat_columns(df):
-    df['mew'] =      str(df['Facility_or_Department'] + ' ' +
+    result = str(df['Facility_or_Department'] + ' ' +
                     df['Function_Description'] + ' ' +
                     df['Fund_Description'] + ' ' +
                     df['Job_Title_Description'] + ' ' +
@@ -44,7 +50,7 @@ def string_concat_columns(df):
                     df['Text_2'] + ' ' +
                     df['Text_3'] + ' ' +
                     df['Text_4'] + ' ' )
-    return df
+    return result
 
 class StemmedTfidfVectorizer(TfidfVectorizer):
     """
@@ -54,6 +60,23 @@ class StemmedTfidfVectorizer(TfidfVectorizer):
     def build_analyzer(self):
          analyzer = super(TfidfVectorizer, self).build_analyzer()
          return lambda doc: stemmer.stemWords(analyzer(doc))
+
+class BagMultiColumn(object):
+
+    def __init__(self):
+        pass
+
+    def transform(self, df):
+        tmp = self.tfidf.transform(df['mew'])
+        return tmp
+
+    def fit(self, df, y=None):
+        print "called fit"
+
+        self.tfidf = StemmedTfidfVectorizer(stop_words='english', ngram_range=(1,2))
+        self.tfidf.fit(df['mew'])
+
+        return self
 
 def validate_model(train, labels):
 
@@ -69,17 +92,26 @@ def validate_model(train, labels):
     for output in outputs:
         cv = cross_validation.StratifiedKFold(labels[output])
         tfidf = StemmedTfidfVectorizer(stop_words='english')
-        clf = SGDClassifier(alpha=.01, loss='log')
+        svd = TruncatedSVD(n_components=100)
+        clf = SGDClassifier(alpha=.01, loss='log', penalty='l2')
         for traincv, testcv in cv:
 
-            transformed_x = tfidf.fit_transform(train.values[traincv])
-            transformed_y = tfidf.fit_transform(train.values[testcv])
+            transformed_x = tfidf.fit_transform(train['mew'].values[traincv])
+            transformed_x = svd.fit_transform(transformed_x)
+#            joined_x = np.hstack([transformed_x, train['LenAll'].values[traincv]])
+
+            transformed_y = tfidf.fit_transform(train['mew'].values[testcv])
+            transformed_y = svd.transform(transformed_y)
+            #joined_y = np.hstack([transformed_y, train['LenAll'].values[testcv]])
+
+
+
             print outputs
             print output
             print "------------------------"
 
-
             clf.fit(transformed_x, labels[output].values[traincv])
+
 
             #print pd.unique(labels[output])
             #print pd.unique(clf.predict(train.values[testcv]))
@@ -133,33 +165,39 @@ num_features = [
 
 
 train = sample_data(train)
+columns_ = pd.unique(train.Function)
 
-train[text_features] = train[text_features].fillna('NA')
-train = string_concat_columns(train)
+train[text_features] = train[text_features].fillna('')
+train['mew'] = train.apply(lambda row: string_concat_columns(row), axis=1)
 train['LenAll'] = len(train['mew'])
-train[num_features] = train[num_features].fillna(0)
+train['WeightedWordCounts'] = train.apply(lambda row: tester(row['mew'], columns_), axis=1)
+#train[num_features] = train[num_features].fillna(0)
 
 
-test[text_features] = test[text_features].fillna('NA')
-test = string_concat_columns(test)
+test[text_features] = test[text_features].fillna('')
+test['mew'] = test.apply(lambda row: string_concat_columns(row), axis=1)
 test['LenAll'] = len(test['mew'])
-test[num_features] = test[num_features].fillna(0)
+test['WeightedWordCounts'] = test.apply(lambda row: tester(row['mew'], columns_), axis=1)
+#test[num_features] = test[num_features].fillna(0)
+
+
+#validate_model(train, train[outputs])
 
 
 tfidf = StemmedTfidfVectorizer(stop_words='english')
 
 transformed_x = tfidf.fit_transform(train['mew'])
+m = sp.sparse.csr_matrix(train.WeightedWordCounts.values.T)
+transformed_x = sp.sparse.hstack((transformed_x, m.T))
 transformed_y = tfidf.transform(test['mew'])
+n = sp.sparse.csr_matrix(test.WeightedWordCounts.values.T)
+transformed_y = sp.sparse.hstack((transformed_y, n.T))
 
+for output in outputs:
+#    #clf = SGDClassifier(alpha=.01, loss='log')
+    clf = SGDClassifier(alpha=.01, loss='log', penalty='l2')
+    clf.fit(transformed_x, train[output])
+    result = clf.predict_proba(transformed_y)
+    sample[[output + '__' + entry for entry in clf.classes_]] = result
 
-
-validate_model(train['mew'], train[outputs])
-
-
-#for output in outputs:
-#    clf = SGDClassifier(alpha=.01, loss='log')
-#    clf.fit(transformed_x, train[output])
-#    result = clf.predict_proba(transformed_y)
-#    sample[[output + '__' + entry for entry in clf.classes_]] = result
-
-#sample.to_csv("resultmixed.csv", index=False)
+sample.to_csv("resultmixed.csv", index=False)
