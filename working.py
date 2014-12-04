@@ -3,6 +3,7 @@ __author__ = 'sbiesan'
 import pandas as pd
 from sklearn import cross_validation
 from sklearn.pipeline import Pipeline, FeatureUnion
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.naive_bayes import MultinomialNB
 from collections import defaultdict
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -12,50 +13,13 @@ from sklearn.decomposition import PCA, TruncatedSVD
 from sklearn.metrics import hamming_loss, log_loss
 from sklearn.decomposition import truncated_svd
 import scipy as sp
+from column_info import outputs, text_features, num_features
 
 from CustomClasses import CustomTransformer, ItemSelector
 
 import numpy as np
 
 sample = pd.read_csv('SubmissionFormat.csv')
-
-
-outputs = [
-    'Function',
-    'Object_Type',
-    'Operating_Status',
-    'Position_Type',
-    'Pre_K',
-    'Reporting',
-    'Sharing',
-    'Student_Type',
-    'Use',
-]
-
-text_features = [
-    'Facility_or_Department',
-    'Function_Description',
-    'Fund_Description',
-    'Job_Title_Description',
-    'Location_Description',
-    'Object_Description',
-    'Position_Extra',
-    'Program_Description',
-    'SubFund_Description',
-    'Sub_Object_Description',
-    'Text_1',
-    'Text_2',
-    'Text_3',
-    'Text_4',
-]
-
-num_features = [
-    'FTE',
-    'Total',
-    'LenAll',
-]
-
-
 
 
 def add_features(df):
@@ -72,8 +36,25 @@ def add_features(df):
     return df
 
 
+
 def sample_data(df):
-    return df.loc[np.random.choice(df.index, df.shape[0] / 2, replace=False)]
+    """
+    Sampling that forces all labels to be available for cross validation
+    This makes it so log_loss doesn't error
+    :param df:
+    :return:
+    """
+    indices = np.random.choice(df.index, df.shape[0] / 10, replace=False)
+    for output in outputs:
+        current_labels = pd.unique(df[output])
+        for label in current_labels:
+            x = df[output]
+            x1 = x[x == label]
+            selected = x1[~x1.index.isin(indices)].index[0:10]
+            indices = np.concatenate((indices, selected))
+
+
+    return df.loc[indices]
 
 def tester(text_, column_):
     num = 0
@@ -132,13 +113,13 @@ def validate_model(train, labels):
                             ])),
                     ('svd', TruncatedSVD(n_components=100)),
                     #('svd', PCA(n_components=100))
-                    ('log', LogisticRegression()),
+                    ('log', LogisticRegression(C=100)),
                     ])
             train_sample = train.reset_index().loc[traincv]
-            train_test = labels[output].ix[traincv]
+            train_test = labels.reset_index()[output].loc[traincv]
 
             test_sample = train.reset_index().loc[testcv]
-            test_test = labels[output].values[testcv]
+            test_test = labels.reset_index()[output].loc[testcv]
 
         #    tfidf.fit(train_sample)
 
@@ -160,7 +141,9 @@ def validate_model(train, labels):
 
 
 #            results[output].append(log_loss(labels[output].values[testcv], clf.predict_proba(transformed_y)))
-#            results[output].append(log_loss(test_test, pipe_clf.predict_proba(test_sample)))
+            #print pd.unique(test_test)
+            #print pd.unique(pipe_clf.predict(test_sample))
+            results[output].append(log_loss(test_test, pipe_clf.predict_proba(test_sample)))
 
 
     for result in results:
@@ -190,25 +173,26 @@ train = sample_data(train)
 
 validate_model(train, train[outputs])
 
+fdgsdg
 
-#tfidf = StemmedTfidfVectorizer(stop_words='english')
-
-#transformed_x = tfidf.fit_transform(train['mew'])
-#m = sp.sparse.csr_matrix(train[num_features].T)
-#transformed_x = sp.sparse.hstack((transformed_x, m.T))
-
-#transformed_y = tfidf.transform(test['mew'])
-#n = sp.sparse.csr_matrix(test[num_features].T)
-#transformed_y = sp.sparse.hstack((transformed_y, n.T))
-
-#for output in outputs:
-#    #clf = SGDClassifier(alpha=.01, loss='log')
-#    clf = SGDClassifier(alpha=.1, loss='log')
-    #clf = LogisticRegression(C=100)
-   # clf.fit(transformed_x, train[output])
+for output in outputs:
+    pipe_clf = Pipeline([
+        ('Features', FeatureUnion([
+                    ('text', CustomTransformer(text_features)),
+                    #('fte', ItemSelector('FTE')),
+                    #('total', ItemSelector('Total')),
+                ])),
+        ('svd', TruncatedSVD(n_components=100)),
+        #('svd', PCA(n_components=100))
+        #('log', LogisticRegression()),
+        ('tree', RandomForestClassifier(n_jobs=-1))
+        ])
+    #clf = SGDClassifier(alpha=.01, loss='log')
+    pipe_clf.fit(train, train[output])
  #   pipe_clf.fit(train, train[output])
- #   print "fit"
- #   result = pipe_clf.predict_proba(test)
- #   sample[[output + '__' + entry for entry in pipe_clf.classes_]] = result
+    print "fit %s" %(output,)
+    result = pipe_clf.predict_proba(test)
+    classes_ = pipe_clf.steps[2][1].classes_
+    sample[[output + '__' + entry for entry in classes_]] = result
 
-#sample.to_csv("resultmixed.csv", index=False)
+sample.to_csv("resultmixed.csv", index=False)

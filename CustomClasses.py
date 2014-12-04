@@ -10,13 +10,18 @@ import Stemmer
 
 class StemmedTfidfVectorizer(TfidfVectorizer):
     """
-    dfgdg
+    Custom Vectorizer for use with CustomTransformer
     """
 
     def build_analyzer(self):
-         stemmer = Stemmer.Stemmer('en')
-         analyzer = super(TfidfVectorizer, self).build_analyzer()
-         return lambda doc: stemmer.stemWords(analyzer(doc))
+        """
+        Overrides analyzer for TfidfVectorizer, currently only adds stem functionality
+        :return: stemmed document
+        """
+
+        stemmer = Stemmer.Stemmer('en')
+        analyzer = super(TfidfVectorizer, self).build_analyzer()
+        return lambda doc: stemmer.stemWords(analyzer(doc))
 
 class CustomTransformer(object):
     def __init__(self, cols):
@@ -24,23 +29,32 @@ class CustomTransformer(object):
         self.model = dict()
 
     def transform(self, X):
-        #print "entered transform"
+        """
+        Transforms all 'columns' via tfidf
+        :param X: pandas data frame
+        :return: sparse matrix
+        """
         X[self.cols] = X[self.cols].fillna('')
         arrays = tuple(self.model[col].transform(X[col]) for col in self.cols)
         result = sp.sparse.hstack(arrays).tocsr()
-        #print result.shape
-        #print "finished transform"
+        print result.shape
+        print "finished transform"
         return result
 
 
     def fit(self, X, y=None):
-        #print "entered fit"
+        """
+        Fits separate Tfidf model to each respective column
+        :param X: Pandas Data frame
+        :param y: Not used
+        :return: returns self
+        """
         X[self.cols] = X[self.cols].fillna('')
         for col in self.cols:
-            #self.model[col] = StemmedTfidfVectorizer(stop_words='english', ngram_range=(1,4))
-            self.model[col] = TfidfVectorizer(stop_words='english',max_features=200)
+            self.model[col] = StemmedTfidfVectorizer(stop_words='english', ngram_range=(1,4))
+            #self.model[col] = TfidfVectorizer(stop_words='english')
             self.model[col].fit(X[col])
-        #print "finished fit"
+        print "finished fit"
         return self
 
 
@@ -80,8 +94,5 @@ class ItemSelector(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, data_dict):
-        #print "entered itemselector"
         result = data_dict[self.key]
-        #print result.shape
-        #print "finished itemselector"
         return result.reshape(result.shape[0], 1)
