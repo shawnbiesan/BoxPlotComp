@@ -37,8 +37,8 @@ class CustomTransformer(object):
         X[self.cols] = X[self.cols].fillna('')
         arrays = tuple(self.model[col].transform(X[col]) for col in self.cols)
         result = sp.sparse.hstack(arrays).tocsr()
-        print result.shape
-        print "finished transform"
+        #print result.shape
+        #print "finished transform"
         return result
 
 
@@ -54,7 +54,7 @@ class CustomTransformer(object):
             self.model[col] = StemmedTfidfVectorizer(stop_words='english', ngram_range=(1,4))
             #self.model[col] = TfidfVectorizer(stop_words='english')
             self.model[col].fit(X[col])
-        print "finished fit"
+        #print "finished fit"
         return self
 
 

@@ -6,14 +6,15 @@ from sklearn.pipeline import Pipeline, FeatureUnion
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.naive_bayes import MultinomialNB
 from collections import defaultdict
-from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression, SGDClassifier
+from sklearn.svm import SVC
 from nltk.corpus import stopwords
 from sklearn.decomposition import PCA, TruncatedSVD
 from sklearn.metrics import hamming_loss, log_loss
 from sklearn.decomposition import truncated_svd
-import scipy as sp
 from column_info import outputs, text_features, num_features
+from sklearn.grid_search import GridSearchCV
+from multi_log_loss import multi_multi_log_loss
 
 from CustomClasses import CustomTransformer, ItemSelector
 
@@ -21,6 +22,29 @@ import numpy as np
 
 sample = pd.read_csv('SubmissionFormat.csv')
 
+
+def pick_best_features(train, test):
+    for output in outputs:
+        pipe_clf = Pipeline([
+            ('Features', FeatureUnion([
+                        ('text', CustomTransformer(text_features)),
+                        #('fte', ItemSelector('FTE')),
+                        #('total', ItemSelector('Total')),
+                    ])),
+            ('svd', TruncatedSVD(n_components=100)),
+            #('log', LogisticRegression(C=100)),
+            #('svc', SVC(C=1000, kernel='linear', probability=True))
+            ])
+
+        clf = LogisticRegression()
+
+        tuned_parameters = [{'C': [10], 'penalty': ['l1', 'l2']}]
+        score = 'log_loss'
+        tran_x = pipe_clf.fit_transform(train)
+        grid = GridSearchCV(clf, tuned_parameters, cv=5, scoring=score)
+        grid.fit(tran_x, test[output])
+        print "best param: "
+        print grid.best_estimator_
 
 def add_features(df):
     df[text_features] = df[text_features].fillna('')
@@ -34,8 +58,6 @@ def add_features(df):
         num_features.append('Weighted%s' %(entry,))
     df[num_features] = df[num_features].fillna(0)
     return df
-
-
 
 def sample_data(df):
     """
@@ -97,12 +119,6 @@ def validate_model(train, labels):
 
     for output in outputs:
         cv = cross_validation.StratifiedKFold(labels[output])
-       # tfidf = CustomTransformer(text_features)
-        #clf = SGDClassifier(alpha=.1, loss='log', penalty='l1')
-        #clf = LogisticRegression(C=1000)
-       # clf = MultinomialNB(alpha=.75)
-        #clf = RandomForestClassifier(n_jobs=-1)
-       # svd = TruncatedSVD(n_components=100)
 
         for traincv, testcv in cv:
             pipe_clf = Pipeline([
@@ -112,8 +128,8 @@ def validate_model(train, labels):
                                 #('total', ItemSelector('Total')),
                             ])),
                     ('svd', TruncatedSVD(n_components=100)),
-                    #('svd', PCA(n_components=100))
                     ('log', LogisticRegression(C=100)),
+                    #('svc', SVC(C=1000, kernel='linear', probability=True))
                     ])
             train_sample = train.reset_index().loc[traincv]
             train_test = labels.reset_index()[output].loc[traincv]
@@ -136,13 +152,7 @@ def validate_model(train, labels):
             print output
             print "------------------------"
 
-            #clf.fit(transformed_x, labels[output].values[traincv])
             pipe_clf.fit(train_sample, train_test)
-
-
-#            results[output].append(log_loss(labels[output].values[testcv], clf.predict_proba(transformed_y)))
-            #print pd.unique(test_test)
-            #print pd.unique(pipe_clf.predict(test_sample))
             results[output].append(log_loss(test_test, pipe_clf.predict_proba(test_sample)))
 
 
@@ -157,36 +167,22 @@ test = pd.read_csv('TestData.csv')
 
 train = sample_data(train)
 
+#validate_model(train, train[outputs])
 
-#tfidf = CustomTransformer(text_features)
-
-#tfidf.fit(train)
-#transformed_x = tfidf.transform(train)
-
-#transformed_y = tfidf.transform(test)
-#train = tfidf.transform(train)
-
-#test = tfidf.transform(test)
-
-#train = add_features(train)
-#test = add_features(test)
-
-validate_model(train, train[outputs])
-
-fdgsdg
+#pick_best_features(train, train[outputs])
 
 for output in outputs:
     pipe_clf = Pipeline([
-        ('Features', FeatureUnion([
-                    ('text', CustomTransformer(text_features)),
-                    #('fte', ItemSelector('FTE')),
-                    #('total', ItemSelector('Total')),
-                ])),
-        ('svd', TruncatedSVD(n_components=100)),
-        #('svd', PCA(n_components=100))
-        #('log', LogisticRegression()),
-        ('tree', RandomForestClassifier(n_jobs=-1))
-        ])
+            ('Features', FeatureUnion([
+                        ('text', CustomTransformer(text_features)),
+                        #('fte', ItemSelector('FTE')),
+                        #('total', ItemSelector('Total')),
+                    ])),
+            ('svd', TruncatedSVD(n_components=100)),
+            #('svd', PCA(n_components=100))
+            ('log', LogisticRegression(C=10)),
+            #('tree', RandomForestClassifier(n_jobs=-1))
+            ])
     #clf = SGDClassifier(alpha=.01, loss='log')
     pipe_clf.fit(train, train[output])
  #   pipe_clf.fit(train, train[output])
