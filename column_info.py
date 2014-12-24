@@ -30,5 +30,4 @@ text_features = [
 num_features = [
     'FTE',
     'Total',
-    'LenAll',
 ]

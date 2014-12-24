@@ -2,15 +2,22 @@ __author__ = 'sbiesan'
 
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.feature_selection import chi2, SelectKBest
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.pipeline import Pipeline, FeatureUnion
+from sklearn.decomposition import PCA, TruncatedSVD
 import scipy as sp
 import numpy as np
 import Stemmer
-
+from column_info import outputs, text_features, num_features
+from sklearn.linear_model import LogisticRegression, SGDClassifier
+from sklearn.svm import SVC
 
 
 class StemmedTfidfVectorizer(TfidfVectorizer):
     """
-    Custom Vectorizer for use with CustomTransformer
+    Custom Vectorizer for use with CustomTransformer. Additionally just stems words,
+    saw no improvement so deprecated
     """
 
     def build_analyzer(self):
@@ -24,6 +31,10 @@ class StemmedTfidfVectorizer(TfidfVectorizer):
         return lambda doc: stemmer.stemWords(analyzer(doc))
 
 class CustomTransformer(object):
+    """
+    Calls tfidf on each text column and then uses sparse hstack to combine them as feature matrix
+    """
+
     def __init__(self, cols):
         self.cols = cols
         self.model = dict()
@@ -37,8 +48,6 @@ class CustomTransformer(object):
         X[self.cols] = X[self.cols].fillna('')
         arrays = tuple(self.model[col].transform(X[col]) for col in self.cols)
         result = sp.sparse.hstack(arrays).tocsr()
-        #print result.shape
-        #print "finished transform"
         return result
 
 
@@ -51,12 +60,36 @@ class CustomTransformer(object):
         """
         X[self.cols] = X[self.cols].fillna('')
         for col in self.cols:
-            self.model[col] = StemmedTfidfVectorizer(stop_words='english', ngram_range=(1,4))
-            #self.model[col] = TfidfVectorizer(stop_words='english')
+            #self.model[col] = StemmedTfidfVectorizer(stop_words='english', ngram_range=(1,4))
+            #self.model[col] = TfidfVectorizer(stop_words='english', ngram_range=(1,4))
+            self.model[col] = TfidfVectorizer(ngram_range=(1,4))
             self.model[col].fit(X[col])
         #print "finished fit"
         return self
 
+
+class TextFeatures(object):
+    """
+    Transformation class to be used for sklearn pipeline that gets normalized length of text columns
+    as a feature
+    """
+
+    def __init__(self, cols):
+        self.cols = cols
+
+    def transform(self, X):
+        X[self.cols] = X[self.cols].fillna('')
+        output_columns = []
+        for col in self.cols:
+            col_name = 'Len_%s' % (col,)
+            X[col_name] = X.apply(lambda row: len(row[col]), axis=1)
+            output_columns.append(col_name)
+            X[col_name] = (X[col_name] - X[col_name].mean()) / (X[col_name].max() - X[col_name].min())
+        return X[output_columns]
+
+
+    def fit(self, X, y=None):
+        return self
 
 class ItemSelector(BaseEstimator, TransformerMixin):
     """For data grouped by feature, select subset of data at a provided key.
@@ -95,4 +128,26 @@ class ItemSelector(BaseEstimator, TransformerMixin):
 
     def transform(self, data_dict):
         result = data_dict[self.key]
+        result = (result - result.mean()) / (result.max() - result.min())
         return result.reshape(result.shape[0], 1)
+
+class CustomPipeline(object):
+    """
+    Centralized place for changing pipeline info, sort of factory like.
+    """
+    @classmethod
+    def get_pipeline(cls):
+        pipe_clf = Pipeline([
+        ('Features', FeatureUnion([
+                    ('AddedFeatures', TextFeatures(text_features)),
+                    ('text', CustomTransformer(text_features)),
+                    ('fte', ItemSelector('FTE')),
+                    ('total', ItemSelector('Total')),
+                ])),
+        ('svd', TruncatedSVD(n_components=300)),
+        #('kbest', SelectKBest(chi2, k=300)),
+        ('log', LogisticRegression(C=10)),
+        #('tree', RandomForestClassifier(n_jobs=-1)),
+        #('svc', SVC(C=10, probability=True))
+        ])
+        return pipe_clf

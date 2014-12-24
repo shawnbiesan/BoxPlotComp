@@ -25,8 +25,9 @@ def multi_multi_log_loss(predicted, actual, class_column_indices, eps=1e-15):
     # calculate log loss for each set of columns that belong to a class:
     for k, this_class_indices in enumerate(class_column_indices):
         # get just the columns for this class
+        #print predicted.shape
+        #print actual.shape
         preds_k = predicted[:, this_class_indices]
-
         # normalize so probabilities sum to one (unless sum is zero, then we clip)
         preds_k /= np.clip(preds_k.sum(axis=1).reshape(-1, 1), eps, np.inf)
 
