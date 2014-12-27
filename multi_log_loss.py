@@ -1,3 +1,7 @@
+"""
+Raw driven data benchmark
+"""
+
 import numpy as np
 
 # Defined for your convenience; these are the

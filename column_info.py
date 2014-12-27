@@ -1,3 +1,7 @@
+"""
+Central place for harcoded column information
+"""
+
 outputs = [
     'Function',
     'Object_Type',

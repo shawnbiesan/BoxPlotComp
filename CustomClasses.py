@@ -1,3 +1,8 @@
+"""
+The intent of this file is to maintain any custom transforms/fits and the main custom pipeline
+I use for my model
+"""
+
 __author__ = 'sbiesan'
 
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -144,10 +149,13 @@ class CustomPipeline(object):
                     ('fte', ItemSelector('FTE')),
                     ('total', ItemSelector('Total')),
                 ])),
-        ('svd', TruncatedSVD(n_components=300)),
-        #('kbest', SelectKBest(chi2, k=300)),
-        ('log', LogisticRegression(C=10)),
-        #('tree', RandomForestClassifier(n_jobs=-1)),
-        #('svc', SVC(C=10, probability=True))
+        ('svd', TruncatedSVD(n_components=400)),
+        #('log', LogisticRegression(C=10)),
+        ('sgd', SGDClassifier(alpha=.001, loss='log'))
         ])
         return pipe_clf
+
+    @classmethod
+    def get_transforms(cls):
+        full = cls.get_pipeline()
+        return Pipeline([step for i, step in enumerate(full.steps) if i != len(full.steps) - 1 ])

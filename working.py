@@ -1,3 +1,7 @@
+"""
+Main Entry point to run experiments
+"""
+
 __author__ = 'sbiesan'
 
 import pandas as pd
@@ -32,16 +36,7 @@ def pick_best_features(train, test):
     :return:
     """
     for output in outputs:
-        pipe_clf = Pipeline([
-
-            ('text', CustomTransformer(text_features)),
-            #('fte', ItemSelector('FTE')),
-            #('total', ItemSelector('Total')),
-
-            ('svd', TruncatedSVD(n_components=100)),
-            #('log', LogisticRegression(C=100)),
-            #('svc', SVC(C=1000, kernel='linear', probability=True))
-            ])
+        pipe_clf = CustomPipeline.get_transforms()
 
         clf = SVC(probability=True, kernel='linear')
 
@@ -239,7 +234,7 @@ def test_model(df):
     """
     results = defaultdict(int)
 
-    train = sample_data_random(df, 0.25)
+    train = sample_data_random(df, 0.50)
     labels_train = train[outputs]
 
     test = sample_data_random(df, 0.25)
@@ -278,6 +273,7 @@ models = test_model(train)
 #pick_best_features(train, train[outputs])
 
 for output in outputs:
+    print "predicting %s" % (output,)
     result = models[output].predict_proba(test)
     classes_ = models[output].steps[2][1].classes_
     sample[[output + '__' + entry for entry in classes_]] = result
