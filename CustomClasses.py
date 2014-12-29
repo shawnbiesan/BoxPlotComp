@@ -19,6 +19,7 @@ from sklearn.linear_model import LogisticRegression, SGDClassifier
 from sklearn.svm import SVC
 
 
+
 class StemmedTfidfVectorizer(TfidfVectorizer):
     """
     Custom Vectorizer for use with CustomTransformer. Additionally just stems words,
@@ -149,9 +150,9 @@ class CustomPipeline(object):
                     ('fte', ItemSelector('FTE')),
                     ('total', ItemSelector('Total')),
                 ])),
-        ('svd', TruncatedSVD(n_components=400)),
+        ('svd', TruncatedSVD(n_components=500)),
         #('log', LogisticRegression(C=10)),
-        ('sgd', SGDClassifier(alpha=.001, loss='log'))
+        ('sgd', SGDClassifier(alpha=.0001, loss='log'))
         ])
         return pipe_clf
 

@@ -17,9 +17,10 @@ from sklearn.decomposition import PCA, TruncatedSVD
 from sklearn.metrics import hamming_loss, log_loss, roc_auc_score
 from sklearn.decomposition import truncated_svd
 from column_info import outputs, text_features, num_features
-from sklearn.grid_search import GridSearchCV
+from sklearn.grid_search import GridSearchCV, RandomizedSearchCV
 from multi_log_loss import multi_multi_log_loss, BOX_PLOTS_COLUMN_INDICES
 import datetime
+from scipy.stats import uniform as sp_rand
 
 from CustomClasses import CustomTransformer, ItemSelector, CustomPipeline
 
@@ -28,25 +29,30 @@ import numpy as np
 sample = pd.read_csv('SubmissionFormat.csv')
 
 
-def pick_best_features(train, test):
+def pick_best_features(df):
     """
     Grid search to find best features. TODO refactor
     :param train: train data
     :param test: test data
     :return:
     """
-    for output in outputs:
+
+    X = sample_data_random(df, .20)
+    overfit_models = dict()
+    for out in outputs:
+        print out
         pipe_clf = CustomPipeline.get_transforms()
 
-        clf = SVC(probability=True, kernel='linear')
+        clf = SGDClassifier(loss='log')
 
-        tuned_parameters = [{'C': [1, 10, 100]}]
+        tuned_parameters = {'alpha': sp_rand()}
         score = 'log_loss'
-        tran_x = pipe_clf.fit_transform(train)
-        grid = GridSearchCV(clf, tuned_parameters, cv=5, scoring=score)
-        grid.fit(tran_x, test[output])
-        print "best param: "
+        tran_x = pipe_clf.fit_transform(X)
+        grid = RandomizedSearchCV(clf, tuned_parameters, cv=5, scoring=score)
+        grid.fit(tran_x, X[out])
         print grid.best_estimator_
+        overfit_models[out] = grid.best_estimator_
+    return overfit_models
 
 def top_words(clf):
     """
@@ -270,7 +276,7 @@ test[num_features] = test[num_features].fillna(0.0)
 #validate_model_real(train, train[outputs])
 validate_model(train)
 models = test_model(train)
-#pick_best_features(train, train[outputs])
+#models = pick_best_features(train)
 
 for output in outputs:
     print "predicting %s" % (output,)
