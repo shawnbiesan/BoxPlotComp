@@ -302,24 +302,15 @@ for num_feature in num_features:
 
 
 #validate_model_real(train, train[outputs])
-#validate_model(train)
-#models = test_model(train)
+validate_model(train)
+models = test_model(train)
 #pick_best_features(train)
 
 for output in outputs:
     print "predicting %s" % (output,)
-    pipe_clf = CustomPipeline.get_transforms()
-    trans = pipe_clf.fit_transform(train)
-    trans_test = pipe_clf.transform(test)
-    model1 = LogisticRegression(C=10)
-    model2 = RandomForestClassifier(n_jobs=-1, n_estimators=500)
-
-    model1.fit(trans, train[output])
-    model2.fit(trans, train[output])
-    result = (model1.predict_proba(trans_test) * .5 + model2.predict_proba(trans_test) * .5)
-    #result = models[output].predict_proba(test)
-    #classes_ = models[output].steps[2][1].classes_
-    classes_ = model1.classes_
+    result = models[output].predict_proba(test)
+    classes_ = models[output].steps[2][1].classes_
     sample[[output + '__' + entry for entry in classes_]] = result
+    sample.to_csv("resultmixed.csv", index=False)
 
 sample.to_csv("resultmixed.csv", index=False)
