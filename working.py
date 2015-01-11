@@ -20,6 +20,7 @@ from column_info import outputs, text_features, num_features
 from sklearn.grid_search import GridSearchCV, RandomizedSearchCV
 from multi_log_loss import multi_multi_log_loss, BOX_PLOTS_COLUMN_INDICES
 import datetime
+import time
 from scipy.stats import uniform as sp_rand
 
 from CustomClasses import CustomTransformer, ItemSelector, CustomPipeline
@@ -37,7 +38,8 @@ def pick_best_features(df):
     :return:
     """
 
-    X = sample_data_random(df, .20)
+    #X = sample_data_random(df, .25)
+    X = df[0:int(df.shape[0] * .25)]
     overfit_models = dict()
     for out in outputs:
         print out
@@ -79,7 +81,7 @@ def sample_data_random(df, percent):
     return df.loc[indices]
 
 
-def sample_data(df, percent):
+def sample_data_random_biased(df, percent):
     """
     Sampling that forces all labels to be available for cross validation
     This makes it so log_loss doesn't error when the sample size is small
@@ -137,7 +139,8 @@ def validate_model(df):
     :param df: pandas data frame
     :return:
     """
-    train = sample_data_random(df, 0.15)
+    #train = sample_data_random(df, 0.30)
+    train = df[0:int(df.shape[0] * .30)]
     labels = train[outputs]
 
     #Simple K-Fold cross validation. 5 folds.
@@ -154,7 +157,7 @@ def validate_model(df):
         cv = cross_validation.StratifiedKFold(labels[output])
 
         for traincv, testcv in cv:
-            pipe_clf = CustomPipeline.get_pipeline()
+            pipe_clf = CustomPipeline.get_transforms()
 
             train_sample = train.reset_index().loc[traincv]
             train_test = labels.reset_index()[output].loc[traincv]
@@ -165,11 +168,25 @@ def validate_model(df):
             print outputs
             print output
             print "------------------------"
+            t0 = time.time()
+            trans = pipe_clf.fit_transform(train_sample)
+            trans_test = pipe_clf.transform(test_sample)
 
-            pipe_clf.fit(train_sample, train_test)
+            #model1 = SGDClassifier(alpha=.0001, loss='log')
+            model1 = LogisticRegression(C=10)
+            model2 = RandomForestClassifier(n_jobs=-1, n_estimators=500)
+
+            model1.fit(trans, train_test)
+            model2.fit(trans, train_test)
+
             #top_words(pipe_clf)
-            preds = pipe_clf.predict_proba(test_sample)
+            #preds = pipe_clf.predict_proba(test_sample)
+           # preds = model1.predict_proba(trans_test)
+            preds = (model1.predict_proba(trans_test) * .50 + model2.predict_proba(trans_test) * .50)
             results[output].append(log_loss(test_test, preds))
+            print "elapsed "
+            print time.time() - t0
+        break
 
 
     for result in results:
@@ -187,7 +204,8 @@ def validate_model_real(df):
     :param df: pandas data frame
     :return:
     """
-    train = sample_data_random(df, 0.10)
+    #train = sample_data_random(df, 0.25)
+    train = df[0:int(df.shape[0] * .30)]
     labels = train[outputs]
     #Simple K-Fold cross validation. 3 folds.
 
@@ -240,21 +258,28 @@ def test_model(df):
     """
     results = defaultdict(int)
 
-    train = sample_data_random(df, 0.50)
+    #train = sample_data_random(df, 0.75)
+    train = df[0:int(df.shape[0] * .75)]
     labels_train = train[outputs]
 
-    test = sample_data_random(df, 0.25)
+    #test = sample_data_random(df, 0.25)
+    test = df[0:int(df.shape[0] * .25)]
     labels_test = test[outputs]
 
     models = dict()
 
     for output in outputs:
+        t0 = time.time()
+
         pipe_clf = CustomPipeline.get_pipeline()
         print "Fitting %s" % (output,)
         pipe_clf.fit(train, labels_train[output])
         preds = pipe_clf.predict_proba(test)
         results[output] = log_loss(labels_test[output], preds)
         models[output] = pipe_clf
+
+        print "elapsed "
+        print time.time() - t0
 
     sum_result = 0
     for result in results:
@@ -267,21 +292,34 @@ def test_model(df):
 
 
 train = pd.read_csv('TrainingData.csv')
-train[num_features] = train[num_features].fillna(0.0)
+train = train.drop_duplicates(subset=text_features+outputs).reset_index()
+for num_feature in num_features:
+    train[num_feature] = train[num_feature].fillna(train[num_feature].mean())
 
 test = pd.read_csv('TestData.csv')
-test[num_features] = test[num_features].fillna(0.0)
+for num_feature in num_features:
+    test[num_feature] = test[num_feature].fillna(test[num_feature].mean())
 
 
 #validate_model_real(train, train[outputs])
-validate_model(train)
-models = test_model(train)
-#models = pick_best_features(train)
+#validate_model(train)
+#models = test_model(train)
+#pick_best_features(train)
 
 for output in outputs:
     print "predicting %s" % (output,)
-    result = models[output].predict_proba(test)
-    classes_ = models[output].steps[2][1].classes_
+    pipe_clf = CustomPipeline.get_transforms()
+    trans = pipe_clf.fit_transform(train)
+    trans_test = pipe_clf.transform(test)
+    model1 = LogisticRegression(C=10)
+    model2 = RandomForestClassifier(n_jobs=-1, n_estimators=500)
+
+    model1.fit(trans, train[output])
+    model2.fit(trans, train[output])
+    result = (model1.predict_proba(trans_test) * .5 + model2.predict_proba(trans_test) * .5)
+    #result = models[output].predict_proba(test)
+    #classes_ = models[output].steps[2][1].classes_
+    classes_ = model1.classes_
     sample[[output + '__' + entry for entry in classes_]] = result
 
 sample.to_csv("resultmixed.csv", index=False)
