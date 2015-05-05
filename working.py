@@ -56,23 +56,9 @@ def pick_best_features(df):
         overfit_models[out] = grid.best_estimator_
     return overfit_models
 
-def top_words(clf):
-    """
-    placeholder to be used to print top words, not sure how to use yet since there are multiple text
-    columns
-    :param clf:
-    :return:
-    """
-    for column_ in clf.steps[0][1].model.keys():
-        feature_names = clf.steps[0][1].model[column_].get_feature_names() ## select k best
-    top10 = np.argsort(clf.steps[1][1].scores_)
-    for entry in top10:
-        print feature_names[entry]
-
 def sample_data_random(df, percent):
     """
-    Sampling that forces all labels to be available for cross validation
-    This makes it so log_loss doesn't error
+    Random sample data, without replacement
     :param df: pandas data frame
     :param percent: percent to random sample
     :return:
@@ -100,22 +86,10 @@ def sample_data_random_biased(df, percent):
             indices = np.concatenate((indices, selected))
     return df.loc[indices]
 
-def tester(text_, column_):
-    """
-    Deprecated method to try to see if text matches a column
-    :param text_: text to check
-    :param column_: column iterable to check
-    :return:
-    """
-    num = 0
-    for entry in column_:
-        for word in entry.split():
-            if word.lower() in text_.lower():
-                num+=1
-    return num
-
-
 def string_concat_columns(df):
+    """
+    Deprecated
+    """
     result = str(df['Facility_or_Department'] + ' ' +
             df['Function_Description'] + ' ' +
             df['Fund_Description'] + ' ' +
@@ -140,10 +114,9 @@ def validate_model(df):
     :return:
     """
     #train = sample_data_random(df, 0.30)
-    train = df[0:int(df.shape[0] * .30)]
+    train = df[0:int(df.shape[0] * .30)] # Want determinism in model validation
     labels = train[outputs]
 
-    #Simple K-Fold cross validation. 5 folds.
 
 
     #iterate through the training and test cross validation segments and
@@ -151,7 +124,6 @@ def validate_model(df):
     results = defaultdict(list)
     sum_mean = 0
     sum_std = 0
-    #train = add_features(train)
 
     for output in outputs:
         cv = cross_validation.StratifiedKFold(labels[output])
@@ -301,10 +273,8 @@ for num_feature in num_features:
     test[num_feature] = test[num_feature].fillna(test[num_feature].mean())
 
 
-#validate_model_real(train, train[outputs])
 validate_model(train)
 models = test_model(train)
-#pick_best_features(train)
 
 for output in outputs:
     print "predicting %s" % (output,)

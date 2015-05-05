@@ -17,9 +17,6 @@ import Stemmer
 from column_info import outputs, text_features, num_features
 from sklearn.linear_model import LogisticRegression, SGDClassifier
 
-import enchant
-
-
 
 class StemmedTfidfVectorizer(TfidfVectorizer):
     """
@@ -37,39 +34,39 @@ class StemmedTfidfVectorizer(TfidfVectorizer):
         analyzer = super(TfidfVectorizer, self).build_analyzer()
         return lambda doc: stemmer.stemWords(analyzer(doc))
 
-class SpellCheckTfidfVectorizer(TfidfVectorizer):
-    """
-    Custom Vectorizer for use with CustomTransformer. Additionally just stems words,
-    saw no improvement so deprecated
-    """
+#class SpellCheckTfidfVectorizer(TfidfVectorizer):
+#    """
+#    Custom Vectorizer for use with CustomTransformer. Additionally just stems words,
+#    saw no improvement so deprecated
+#    """
 
-    def spell_check_words(self, words, spell_checker):
-        li = []
-        for gram in words:
-            gram_li = []
-            for word in gram.split():
-                if spell_checker.check(word):
-                    gram_li.append(word)
-                else:
-                    try:
-                        gram_li.append(spell_checker.suggest(word)[0])
-                    except:
-                        print word
-                        gram_li.append(word)
+#    def spell_check_words(self, words, spell_checker):
+#        li = []
+#        for gram in words:
+#            gram_li = []
+#            for word in gram.split():
+#                if spell_checker.check(word):
+#                    gram_li.append(word)
+#                else:
+#                    try:
+#                        gram_li.append(spell_checker.suggest(word)[0])
+#                    except:
+#                        print word
+#                        gram_li.append(word)
+#
+#            li.append(' '.join(gram_li))
+#        return li
 
-            li.append(' '.join(gram_li))
-        return li
 
+ #   def build_analyzer(self):
+ #       """
+ #       Overrides analyzer for TfidfVectorizer, currently only adds stem functionality
+ #       :return: stemmed document
+ #       """
 
-    def build_analyzer(self):
-        """
-        Overrides analyzer for TfidfVectorizer, currently only adds stem functionality
-        :return: stemmed document
-        """
-
-        d = enchant.Dict('en_US')
-        analyzer = super(TfidfVectorizer, self).build_analyzer()
-        return lambda doc: self.spell_check_words(analyzer(doc), d)
+  #      d = enchant.Dict('en_US')
+  #      analyzer = super(TfidfVectorizer, self).build_analyzer()
+  #      return lambda doc: self.spell_check_words(analyzer(doc), d)
 
 class CustomTransformer(object):
     """
